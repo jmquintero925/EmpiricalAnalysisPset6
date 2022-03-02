@@ -20,11 +20,11 @@ classdef    auxFunctions
             D(3,:)   = struct.beta3(4:end)'+sum(D(1:2,:).*struct.beta3(2:3));
             % F matrix
             Delta    = (1/(struct.n))*diag([struct.sigma1,struct.sigma2,struct.sigma3]);
-            F        = J*sqrt(Delta);
+            F        = inv(J)*sqrt(Delta);
             % Store results
             output.H = H;
             output.D = D;
-            output.J = J;
+            output.J = inv(J);
             output.F = F;
             
         end
