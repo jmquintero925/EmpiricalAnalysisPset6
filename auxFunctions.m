@@ -15,11 +15,11 @@ classdef    auxFunctions
             H(2)    = struct.beta2(1)+struct.beta2(1)*H(1);
             D(2,:)  = struct.beta2(3:end) + struct.beta2(2)*(D(1,:)');
             % Third Regression
-            J(3,1:2) = struct.beta3(2:3);
+            J(3,1:2) = -struct.beta3(2:3);
             H(3)     = struct.beta3(1) - J(3,1:2)*H(1:2);
             D(3,:)   = struct.beta3(4:end)'+sum(D(1:2,:).*struct.beta3(2:3));
             % F matrix
-            Delta    = (1/(struct.n))*diag([struct.sigma1,struct.sigma2,struct.sigma3]);
+            Delta    = diag([struct.sigma1,struct.sigma2,struct.sigma3]);
             F        = inv(J)*sqrt(Delta);
             % Store results
             output.H = H;
@@ -30,10 +30,11 @@ classdef    auxFunctions
         end
         % Function to Update up to date Gamma
         function Gamma = calculateGamma(Rt,Gamma0)
+            Rt = flipud(Rt);
             % Initial Prior
             Gamma = Gamma0;
             % Loop to update Gamma
-            for i = 1:size(Rt,2)
+            for i = 1:size(Rt,1)
                 Gamma = (Rt(i,:)')*Rt(i,:) + Gamma;
             end
             

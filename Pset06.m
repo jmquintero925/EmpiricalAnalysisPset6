@@ -1,6 +1,6 @@
 %% Import data
 clear all;
-close all;
+close all; clc;
 opts = delimitedTextImportOptions("NumVariables", 4);
 
 % Specify range and delimiter
@@ -22,6 +22,16 @@ period      = flip(tbl.period);
 logC_diff   = flip(tbl.logC_diff);
 logElogC    = flip(tbl.logElogC);
 logDlogC    = flip(tbl.logDlogC);
+
+% 
+save = true;
+try
+   global c
+   myColors();
+   myCols = true;
+catch
+    warning("Using standard Matlab palette for plot")
+end
 
 clear opts tbl
 clc;
@@ -74,14 +84,6 @@ end
 
 
 %% Plot Estimated IRF 
-save = false;
-try
-   global c
-   myColors();
-   myCols = true;
-catch
-    warning("Using standard Matlab palette for plot")
-end
 
 % Plot the IRF
 if(myCols)
@@ -101,12 +103,65 @@ else
     ylabel('IRF')
     legend('Impulse Response','Long Term Effect','Location','southeast','box','off')
 end
+if(save)
+    export_fig('Pset06Q1','-pdf','-transparent'); 
+end
 
+%% Simulate
 
+rng(1)
+%---Store simulation parameters----
+% Mean
+simpar.b1 = struct.beta1;
+simpar.b2 = struct.beta2;
+simpar.b3 = struct.beta3;
+% Matrix Lambda
+cons      = ones(size(Xt,1),1);
+simpar.L1 = auxFunctions.calculateGamma([cons,Xt],0);
+simpar.L2 = auxFunctions.calculateGamma([cons,logC_diff(idx),Xt],0);
+simpar.L3 = auxFunctions.calculateGamma([cons,logC_diff(idx),logElogC(idx),Xt],0);
+% C
+simpar.c  = Z1.NumObservations;
+% d
+simpar.d1 = Z1.SSE;
+simpar.d2 = Z2.SSE;
+simpar.d3 = Z3.SSE;
 
+% Simulate
+simStruct = struct;
+nSim      = 1e02;
 
+% Vector of IRF
+IRF     = NaN(nSim,1);
+minEig  = NaN(nSim,1);
 
-
+tic
+for s = 1:nSim
+    % Simulate the beta and sigma for each regressions
+    for reg = 1:3
+        % Which regression
+        r = string(reg);
+        % Simulate sigma
+        simStruct.(strcat('sigma',r))   = 1/gamrnd(simpar.c/2,2/simpar.(strcat('d',r)));
+        % Get the inverse of Lambda
+        L = inv(simpar.(strcat('L',r)));
+        % Account for numerical errors
+        L = (L+L')/2;
+        % Simulate Beta
+        simStruct.(strcat('beta',r))    = mvnrnd(simpar.(strcat('b',r)),L*simStruct.(strcat('sigma',r)))';
+    end
+    % Calculate the model primitives for simulated values
+    simMoments = auxFunctions.calculateMatrices(simStruct);
+    % Add the var structure
+    simMoments = auxFunctions.calculateVAR(simMoments);
+    % Check if the matrix is stable
+    if(all(abs(eig(simMoments.A))<1))
+        minEig(s) = min(abs(eig(simMoments.A)));
+        IRF(s)    = auxFunctions.calculateIRF(simMoments);
+        
+    end
+end
+toc
 
 
 
