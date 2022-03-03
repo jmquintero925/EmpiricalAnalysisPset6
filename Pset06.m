@@ -121,7 +121,7 @@ simpar.L1 = auxFunctions.calculateGamma([cons,Xt],0);
 simpar.L2 = auxFunctions.calculateGamma([cons,logC_diff(idx),Xt],0);
 simpar.L3 = auxFunctions.calculateGamma([cons,logC_diff(idx),logElogC(idx),Xt],0);
 % C
-simpar.c  = Z1.NumObservations;
+simpar.c  = Z1.NumObservations-2;
 % d
 simpar.d1 = Z1.SSE;
 simpar.d2 = Z2.SSE;
@@ -129,11 +129,12 @@ simpar.d3 = Z3.SSE;
 
 % Simulate
 simStruct = struct;
-nSim      = 1e02;
+nSim      = 1e04;
 
 % Vector of IRF
 IRF     = NaN(nSim,1);
-minEig  = NaN(nSim,1);
+% Warning: Next line makes the code slow. 
+IRh_h   = NaN(nSim,500);
 
 tic
 for s = 1:nSim
@@ -156,17 +157,80 @@ for s = 1:nSim
     simMoments = auxFunctions.calculateVAR(simMoments);
     % Check if the matrix is stable
     if(all(abs(eig(simMoments.A))<1))
-        minEig(s) = min(abs(eig(simMoments.A)));
+        % Long term IRF
         IRF(s)    = auxFunctions.calculateIRF(simMoments);
+        % Warning: Loop makes code very slow
+        % Transition
+        for i = 1:500
+            % fill the vector
+            IRh_h(s,i) = auxFunctions.calculateIRF(simMoments,i);
+        end
+
         
     end
 end
 toc
+% Clear auxiliary variables
+N      = s;
+clear s reg i r
+
+% Count surviving draws
+idx    = ~isnan(IRF);
+numObs = sum(idx);
 
 
+% Remove NaN observations
+IRF     = IRF(idx);
+IRh_h   = IRh_h(idx,:);
 
+% Sort observations
+[IRF,idx]   = sort(IRF);
+IRh_h       = IRh_h(idx,:);
 
+%% Plots of IRF  
 
+% Trim outliers (keep distribution between 0.1 and 99.9 percent)
+p1      = round(length(IRF)*1e-03);
+IRF     = IRF((p1+1):end-p1);
+IRh_h   = IRh_h((p1+1):end-p1,:);
 
+% Calculate percentiles
+p10 = round(length(IRF)*1e-01);
+p50 = round(length(IRF)*5e-01);
+p90 = round(length(IRF)*9e-01);
+
+% Plot impulse response for those percentiles
+figure;
+hold on
+plot(IRh_h(p10,:),'Color',c.maroon)
+plot(IRh_h(p50,:),'Color',c.nvyBlue)
+plot(IRh_h(p90,:),'Color',c.dkGreen)
+plot([1,500],[IRF(p10),IRF(p10)],'--k','LineWidth',1.2)
+plot([1,500],[IRF(p50),IRF(p50)],'--k','LineWidth',1.2)
+plot([1,500],[IRF(p90),IRF(p90)],'--k','LineWidth',1.2)
+xlabel('Period')
+ylabel('IRF')
+legend('Percentile 10','Median','Percentile 90','Location','northwest','box','off')
+ylim(max(ylim(),0))
+export_fig('Pset06Q1d1','-pdf','-transparent'); 
+
+%% Plot distribution of IRF
+% Fit Kernel to have a smooth distribution
+pd = fitdist(IRF,'Lognormal');
+x  = linspace(0.01,3,1e03);
+y  = pdf(pd,x);
+
+% Plot distribution 
+dist = figure;
+hold on
+patch([[0,5],flip(x)],[[0,0],flip(y)],[0.12 0.18 0.48],'FaceAlpha',0.27)
+pl10 = plot([IRF(p10),IRF(p10)],ylim(),'Color',c.maroon,'LineWidth',1.2);
+pl50 = plot([IRF(p50),IRF(p50)],ylim(),'Color',c.nvyBlue,'LineWidth',1.2);
+pl90 = plot([IRF(p90),IRF(p90)],ylim(),'Color',c.dkGreen,'LineWidth',1.2);
+xlim([0,0.5])
+legend([pl10,pl50,pl90],'Percentile 10','Median','Percentile 90','Location','northeast','box','off')
+ylabel('Density')
+xlabel('Long Term Impulse Response')
+saveas(dist,'Pset06Q1d2.eps','epsc')
 
 
